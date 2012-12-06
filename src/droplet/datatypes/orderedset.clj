@@ -47,21 +47,25 @@
     (< clockl clockr) ;; If there is a lamport clock ordering, use that
     (siteid<? siteidl siteidr))) ;; else order by MAC address
 
-;; Compare by path and break ties (mini-nodes are siblings in same major node) with disambiguator
+;; Compare by path and break ties (mini-nodes are siblings in same major
+;; node) with disambiguator
 (defn item<?
   [{pathl :path} {pathr :path}]
   (loop [pathl pathl
          pathr pathr]
     (let [{l :branch l-disamb :disamb} (first pathl)
           {r :branch r-disamb :disamb} (first pathr)
-          l-is-mininode (and l-disamb (> (count pathl) 1))] ;; mininode if this is not the last node and we have a disambiguator
+          ;; mininode if this is not the last node and we have a disambiguator
+          l-is-mininode (and l-disamb (> (count pathl) 1))]
       (cond
         (nil? l) (= r 1)
         (nil? r) (= l 0)
-        (= l r) (if (or (and l-is-mininode r-disamb) ;; Comparing mininode to end node or other mininode, order by disambiguator
-                        (and (= 1 (count pathl)) (= 1 (count pathr)))) ;; Finishes with two mini-siblings, order by disambiguator
+        ;; Comparing mininode to end node or other mininode, order by disambiguator
+        (= l r) (if (or (and l-is-mininode r-disamb)
+                        ;; Finishes with two mini-siblings, order by disambiguator
+                        (and (= 1 (count pathl)) (= 1 (count pathr))))
                    (disamb<? l-disamb r-disamb)
-                   (recur (subvec pathl 1) (subvec pathr 1))) ;; Normal case
+                   (recur (subvec pathl 1) (subvec pathr 1)))
         :else    (< l r)))))
 
 (defn path-len
