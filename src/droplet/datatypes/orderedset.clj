@@ -96,8 +96,8 @@
    that is, they have the same path but differ in disambiguators"
    [pathl pathr]
    (and (= (count pathl) (count pathr))
-        (= (for [{branch :branch} pathl] branch)
-           (for [{branch :branch} pathr] branch))))
+        (= (map :branch pathl)
+           (map :branch pathr))))
 
 (defn pathnode
   "Returns a new pathnode with the given branch
