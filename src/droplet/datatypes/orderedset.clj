@@ -47,6 +47,11 @@
     (< clockl clockr) ;; If there is a lamport clock ordering, use that
     (siteid<? siteidl siteidr))) ;; else order by MAC address
 
+(defn- single?
+  "Returns true if the collection contains one item; else false."
+  [coll]
+  (= 1 (count coll)))
+
 ;; Compare by path and break ties (mini-nodes are siblings in same major
 ;; node) with disambiguator
 (defn item<?
@@ -63,9 +68,9 @@
         ;; Comparing mininode to end node or other mininode, order by disambiguator
         (= l r) (if (or (and l-is-mininode r-disamb)
                         ;; Finishes with two mini-siblings, order by disambiguator
-                        (and (= 1 (count pathl)) (= 1 (count pathr))))
+                        (and (single? pathl) (single? pathr)))
                    (disamb<? l-disamb r-disamb)
-                   (recur (subvec pathl 1) (subvec pathr 1)))
+                   (recur (rest pathl) (rest pathr)))
         :else    (< l r)))))
 
 (defn path-len
