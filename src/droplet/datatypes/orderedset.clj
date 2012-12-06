@@ -127,6 +127,10 @@
   [path]
   (:disamb (last path)))
 
+(defn rootnode
+  []
+  [(pathnode nil)])
+
 (defn new-id
   "Returns a new position id between the two given ids
 
@@ -136,11 +140,17 @@
   ;;      need it at the end
   [{pathl :path} {pathr :path}]
   (cond
-    (and (nil? pathl) (nil? pathr)) [(pathnode nil)] ;; If it's an empty tree, create the root
-    (and (nil? pathl) (not (nil? pathr))) (extend-path pathr (pathnode 0)) ;; If we're inserting at the left-most position
-    (ancestor? pathl pathr) (extend-path pathr (pathnode 0)) ;; If we need to make a left child of path b
-    (ancestor? pathr pathl) (extend-path pathl (pathnode 1))
-    (mini-sibling? pathl pathr) (conj pathl (pathnode 1)) ;; Maintain disambiguator if making a child of a mininode
+    (and (nil? pathl) (nil? pathr))
+    (rootnode)
+
+    (or (and (nil? pathl) (seq pathr))
+        (ancestor? pathl pathr))
+    (extend-path pathr (pathnode 0))
+
+    ;; Maintain disambiguator if making a child of a mininode
+    (mini-sibling? pathl pathr)
+    (conj pathl (pathnode 1))
+
     :else (extend-path pathl (pathnode 1))))
 
 ;; Steps to an insert:
