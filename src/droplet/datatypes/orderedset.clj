@@ -108,8 +108,9 @@
    {:branch branch :disamb {:clock (clock-value) :siteid "MACADDRESS"}})
 
 (defn extend-path
-  "Extends the given path with a new tail element in the path. Will remove any disambiguator
-   in the last path node if it's a major node before extending
+  "Extends the given path with a new tail element in the path. Will
+   remove  any disambiguator in the last path node if it's a major node
+   before extending
 
    TODO check for major node, removes unconditionally right now"
    [oldpath newnode]
