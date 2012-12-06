@@ -115,10 +115,12 @@
    TODO check for major node, removes unconditionally right now"
    [oldpath newnode]
    ;; Filter out root node with {branch :nil}
-   (let [cleanpath (vec (filter #(:branch %) oldpath))]
-     (cond
-      (= 0 (count cleanpath)) [newnode]
-      :else (conj (conj (vec (butlast cleanpath)) (select-keys (last cleanpath) (list :branch))) newnode))))
+   (let [cleanpath (filter :branch oldpath)]
+     (if (empty? cleanpath)
+       [newnode]
+       (conj (vec (butlast cleanpath))
+             (select-keys (last cleanpath) [:branch])
+             newnode))))
 
 (defn disamb-for-path
   "Returns the disambiguator for the node described by the given path"
