@@ -42,7 +42,7 @@
   (< (.compareTo macaddra macaddrb) 0))
 
 (defn disamb<?
-  [{clockl :clock siteidl :siteid} {clockr :clock :siteidr :siteid}]
+  [{clockl :clock siteidl :siteid} {clockr :clock siteidr :siteid}]
   (if (not= clockl clockr)
     (< clockl clockr) ;; If there is a lamport clock ordering, use that
     (siteid<? siteidl siteidr))) ;; else order by MAC address
