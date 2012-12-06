@@ -42,10 +42,10 @@
   (< (.compareTo macaddra macaddrb) 0))
 
 (defn disamb<?
-  [disamb-a disamb-b]
-  (if (not= (:clock disamb-a) (:clock disamb-b))
-    (< (:clock disamb-a) (:clock disamb-b)) ;; If there is a lamport clock ordering, use that
-    (siteid<? (:siteid disamb-a) (:siteid disamb-b)))) ;; else order by MAC address
+  [{clockl :clock siteidl :siteid} {clockr :clock :siteidr :siteid}]
+  (if (not= clockl clockr)
+    (< clockl clockr) ;; If there is a lamport clock ordering, use that
+    (siteid<? siteidl siteidr))) ;; else order by MAC address
 
 ;; Compare by path and break ties (mini-nodes are siblings in same major node) with disambiguator
 (defn item<?
