@@ -77,19 +77,19 @@
   "Returns the path length for this path, which is usually the number of pairs
    except for the root which has a pair but no branch"
   [path]
-  (if (and (= 1 (count path)) (nil? (:branch (first path))))
+  (if (and (single? path) (nil? (:branch (first path))))
     0
     (count path)))
 
 (defn ancestor?
   "Returns if the first path is an ancestor to the second"
   [pathl pathr]
-  (and (< (path-len pathl) (path-len pathr)) ;; If path A is longer or equal, no way it can be an ancestor
-    (loop [pathl pathl                           ;; Otherwise, determine if it's an ancestor
-           pathr pathr]
-      (let [{l :branch l-disamb :disamb} (first pathl)
-            {r :branch r-disamb :disamb} (first pathr)]
-        (or (nil? l) (and (= l r) (recur (subvec pathl 1) (subvec pathr 1))))))))
+  (when (< (path-len pathl) (path-len pathr))
+    (loop [[nodel & morel] pathl
+           [noder & morer] pathr]
+      (let [{l :branch} nodel
+            {r :branch} noder]
+        (or (nil? l) (and (= l r) (recur morel morer)))))))
 
 (defn mini-sibling?
   "Returns true if the two paths are mini-siblings of each other,
