@@ -32,8 +32,7 @@
   "Next value for this node's vector clock id
   TODO"
   []
-  (swap! clock inc)
-  @clock)
+  (swap! clock inc))
 
 (defn siteid<?
   "Returns a < relation for two site ids, that are usually MAC addresses.
