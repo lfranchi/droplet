@@ -197,30 +197,36 @@
   [coll item]
   (some #{item} coll))
 
+(defn- seq-diff
+  "Returns a new sequence of all elements in seqa not contained in seqb."
+  [seqa seqb]
+  (filter #(not (in seqb %)) seqa))
+
 (defn removed-set
   [{oset :oset vc :vc}]
   (let [existing-paths (map :path oset)]
-    (set (filter (fn [[item & _]] (not (in existing-paths item))) vc))))
+    (set (seq-diff (map first vc) existing-paths))))
 
 (defrecord OrderedSet [oset vc]
   SemiLattice
   (bottom [this]
     (->OrderedSet (ordered-set) (kvs/->Causal {} nil)))
+
   (lte? [this that]
     (let [this-removed (removed-set this)
           that-removed (removed-set that)]
       (and (lte? (:vc this) (:vc that))
            (clojure.set/subset? this-removed that-removed))))
+
   (join [this that]
-    (let [new-in-that (set (for [item (:oset that)
-                                  :when (not (some #{(:path item)} (:vc this)))]
-                              item)) ;; New items added in that that were not removed in this
-          removed-in-this (set (for [item (clojure.set/difference (:oset this) (:oset that))
-                                      :when (some #{(:path item)} (keys (:vc that)))]
-                                  item)) ;; Items removed in this which that already knew about
-          updated-set (apply sorted-set-by item<?
-                        (clojure.set/difference
-                          (clojure.set/union (:oset this) new-in-that)
-                          removed-in-this))]
+    (let [new-in-that (set (seq-diff (:oset that) (:vc this)))
+          vc-keys (keys (:vc that))
+          removed-in-this (set (filter
+                                #(in vc-keys (:path %))
+                                (clojure.set/difference (:oset this) (:oset that))))
+          updated-set (into (ordered-set)
+                            (clojure.set/difference
+                             (clojure.set/union (:oset this) new-in-that)
+                             removed-in-this))]
       (->OrderedSet updated-set (join (:vc this) (:vc that))))))
 
