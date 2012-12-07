@@ -230,3 +230,25 @@
                              removed-in-this))]
       (->OrderedSet updated-set (join (:vc this) (:vc that))))))
 
+
+(deftype Foo [a]
+        clojure.lang.IPersistentCollection
+        (seq [self] (seq a))
+        (cons [self o] (Foo. (conj a o)))
+        (empty [self] (Foo. #{}))
+
+        clojure.lang.ISeq
+        (first [self] (first a))
+        (next [self] (next a))
+        (more [self] (rest a))
+
+        clojure.lang.IPersistentSet
+        (disjoin [_ item] (Foo. (disj a item)))
+        (contains [_ item] (contains? a item))
+        (get [_ item] (get a item))
+
+        Object
+        (toString [self] (str a)))
+
+(defmethod print-method Foo [o w]
+        (.write w (.toString o)))
