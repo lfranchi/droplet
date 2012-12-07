@@ -32,8 +32,7 @@
   "Next value for this node's vector clock id
   TODO"
   []
-  (swap! clock inc)
-  @clock)
+  (swap! clock inc))
 
 (defn siteid<?
   "Returns a < relation for two site ids, that are usually MAC addresses.
@@ -43,53 +42,62 @@
   (< (.compareTo macaddra macaddrb) 0))
 
 (defn disamb<?
-  [disamb-a disamb-b]
-  (if (not= (:clock disamb-a) (:clock disamb-b))
-    (< (:clock disamb-a) (:clock disamb-b)) ;; If there is a lamport clock ordering, use that
-    (siteid<? (:siteid disamb-a) (:siteid disamb-b)))) ;; else order by MAC address
+  [{clockl :clock siteidl :siteid} {clockr :clock siteidr :siteid}]
+  (if (not= clockl clockr)
+    (< clockl clockr) ;; If there is a lamport clock ordering, use that
+    (siteid<? siteidl siteidr))) ;; else order by MAC address
 
-;; Compare by path and break ties (mini-nodes are siblings in same major node) with disambiguator
+(defn- single?
+  "Returns true if the collection contains one item; else false."
+  [coll]
+  (= 1 (count coll)))
+
+;; Compare by path and break ties (mini-nodes are siblings in same major
+;; node) with disambiguator
 (defn item<?
   [{pathl :path} {pathr :path}]
   (loop [pathl pathl
          pathr pathr]
     (let [{l :branch l-disamb :disamb} (first pathl)
           {r :branch r-disamb :disamb} (first pathr)
-          l-is-mininode (and l-disamb (> (count pathl) 1))] ;; mininode if this is not the last node and we have a disambiguator
+          ;; mininode if this is not the last node and we have a disambiguator
+          l-is-mininode (and l-disamb (> (count pathl) 1))]
       (cond
         (nil? l) (= r 1)
         (nil? r) (= l 0)
-        (= l r) (if (or (and l-is-mininode r-disamb) ;; Comparing mininode to end node or other mininode, order by disambiguator
-                        (and (= 1 (count pathl)) (= 1 (count pathr)))) ;; Finishes with two mini-siblings, order by disambiguator
+        ;; Comparing mininode to end node or other mininode, order by disambiguator
+        (= l r) (if (or (and l-is-mininode r-disamb)
+                        ;; Finishes with two mini-siblings, order by disambiguator
+                        (and (single? pathl) (single? pathr)))
                    (disamb<? l-disamb r-disamb)
-                   (recur (subvec pathl 1) (subvec pathr 1))) ;; Normal case
+                   (recur (rest pathl) (rest pathr)))
         :else    (< l r)))))
 
 (defn path-len
   "Returns the path length for this path, which is usually the number of pairs
    except for the root which has a pair but no branch"
   [path]
-  (if (and (= 1 (count path)) (nil? (:branch (first path))))
+  (if (and (single? path) (nil? (:branch (first path))))
     0
     (count path)))
 
 (defn ancestor?
   "Returns if the first path is an ancestor to the second"
   [pathl pathr]
-  (and (< (path-len pathl) (path-len pathr)) ;; If path A is longer or equal, no way it can be an ancestor
-    (loop [pathl pathl                           ;; Otherwise, determine if it's an ancestor
-           pathr pathr]
-      (let [{l :branch l-disamb :disamb} (first pathl)
-            {r :branch r-disamb :disamb} (first pathr)]
-        (or (nil? l) (and (= l r) (recur (subvec pathl 1) (subvec pathr 1))))))))
+  (when (< (path-len pathl) (path-len pathr))
+    (loop [[nodel & morel] pathl
+           [noder & morer] pathr]
+      (let [{l :branch} nodel
+            {r :branch} noder]
+        (or (nil? l) (and (= l r) (recur morel morer)))))))
 
 (defn mini-sibling?
   "Returns true if the two paths are mini-siblings of each other,
    that is, they have the same path but differ in disambiguators"
    [pathl pathr]
    (and (= (count pathl) (count pathr))
-        (= (for [{branch :branch} pathl] branch)
-           (for [{branch :branch} pathr] branch))))
+        (= (map :branch pathl)
+           (map :branch pathr))))
 
 (defn pathnode
   "Returns a new pathnode with the given branch
@@ -100,21 +108,28 @@
    {:branch branch :disamb {:clock (clock-value) :siteid "MACADDRESS"}})
 
 (defn extend-path
-  "Extends the given path with a new tail element in the path. Will remove any disambiguator
-   in the last path node if it's a major node before extending
+  "Extends the given path with a new tail element in the path. Will
+   remove  any disambiguator in the last path node if it's a major node
+   before extending
 
    TODO check for major node, removes unconditionally right now"
    [oldpath newnode]
    ;; Filter out root node with {branch :nil}
-   (let [cleanpath (vec (filter #(:branch %) oldpath))]
-     (cond
-      (= 0 (count cleanpath)) [newnode]
-      :else (conj (conj (vec (butlast cleanpath)) (select-keys (last cleanpath) (list :branch))) newnode))))
+   (let [cleanpath (filter :branch oldpath)]
+     (if (empty? cleanpath)
+       [newnode]
+       (conj (vec (butlast cleanpath))
+             (select-keys (last cleanpath) [:branch])
+             newnode))))
 
 (defn disamb-for-path
   "Returns the disambiguator for the node described by the given path"
   [path]
   (:disamb (last path)))
+
+(defn rootnode
+  []
+  [(pathnode nil)])
 
 (defn new-id
   "Returns a new position id between the two given ids
@@ -125,11 +140,17 @@
   ;;      need it at the end
   [{pathl :path} {pathr :path}]
   (cond
-    (and (nil? pathl) (nil? pathr)) [(pathnode nil)] ;; If it's an empty tree, create the root
-    (and (nil? pathl) (not (nil? pathr))) (extend-path pathr (pathnode 0)) ;; If we're inserting at the left-most position
-    (ancestor? pathl pathr) (extend-path pathr (pathnode 0)) ;; If we need to make a left child of path b
-    (ancestor? pathr pathl) (extend-path pathl (pathnode 1))
-    (mini-sibling? pathl pathr) (conj pathl (pathnode 1)) ;; Maintain disambiguator if making a child of a mininode
+    (and (nil? pathl) (nil? pathr))
+    (rootnode)
+
+    (or (and (nil? pathl) (seq pathr))
+        (ancestor? pathl pathr))
+    (extend-path pathr (pathnode 0))
+
+    ;; Maintain disambiguator if making a child of a mininode
+    (mini-sibling? pathl pathr)
+    (conj pathl (pathnode 1))
+
     :else (extend-path pathl (pathnode 1))))
 
 ;; Steps to an insert:
@@ -150,13 +171,11 @@
   inserts at the beginning.
   Returns the new ordered set"
   [{oset :oset :as oset-lattice} prev-data data]
-  (let [from-prev (seq (drop-while #(not= (:val %) prev-data) oset))
-        before (first from-prev)
-        after (if before (second from-prev) (first oset))
+  (let [[before after & _] (drop-while #(not= (:val %) prev-data) oset)
+        after (if before after (first oset))
         path (new-id before after)]
-    (if (or
-          (and (nil? before) (not (nil? prev-data)))
-          (= (:val after) data))
+    (if (or (and (nil? before) (seq prev-data))
+            (= (:val after) data))
       oset-lattice ;; If we didn't find the previous term (but it was specified) ignore
       (-> oset-lattice ;; Insert item and update item in vc
         (update-in [:oset] conj {:path path :val data})
@@ -173,30 +192,63 @@
   []
   (sorted-set-by item<?))
 
+(defn- in
+  "If item exists in coll, return item; else nil."
+  [coll item]
+  (some #{item} coll))
+
+(defn- seq-diff
+  "Returns a new sequence of all elements in seqa not contained in seqb."
+  [seqa seqb]
+  (filter #(not (in seqb %)) seqa))
+
 (defn removed-set
-  [oset-lattice]
-  (let [existing-paths (for [node (:oset oset-lattice)] (:path node))]
-    (set (for [item (:vc oset-lattice) :when (not (some #{(first item)} existing-paths))] (first item)))))
+  [{oset :oset vc :vc}]
+  (let [existing-paths (map :path oset)]
+    (set (seq-diff (map first vc) existing-paths))))
 
 (defrecord OrderedSet [oset vc]
   SemiLattice
   (bottom [this]
     (->OrderedSet (ordered-set) (kvs/->Causal {} nil)))
+
   (lte? [this that]
     (let [this-removed (removed-set this)
           that-removed (removed-set that)]
       (and (lte? (:vc this) (:vc that))
            (clojure.set/subset? this-removed that-removed))))
+
   (join [this that]
-    (let [new-in-that (set (for [item (:oset that)
-                                  :when (not (some #{(:path item)} (:vc this)))]
-                              item)) ;; New items added in that that were not removed in this
-          removed-in-this (set (for [item (clojure.set/difference (:oset this) (:oset that))
-                                      :when (some #{(:path item)} (keys (:vc that)))]
-                                  item)) ;; Items removed in this which that already knew about
-          updated-set (apply sorted-set-by item<?
-                        (clojure.set/difference
-                          (clojure.set/union (:oset this) new-in-that)
-                          removed-in-this))]
+    (let [new-in-that (set (seq-diff (:oset that) (:vc this)))
+          vc-keys (keys (:vc that))
+          removed-in-this (set (filter
+                                #(in vc-keys (:path %))
+                                (clojure.set/difference (:oset this) (:oset that))))
+          updated-set (into (ordered-set)
+                            (clojure.set/difference
+                             (clojure.set/union (:oset this) new-in-that)
+                             removed-in-this))]
       (->OrderedSet updated-set (join (:vc this) (:vc that))))))
 
+
+(deftype Foo [a]
+        clojure.lang.IPersistentCollection
+        (seq [self] (seq a))
+        (cons [self o] (Foo. (conj a o)))
+        (empty [self] (Foo. #{}))
+
+        clojure.lang.ISeq
+        (first [self] (first a))
+        (next [self] (next a))
+        (more [self] (rest a))
+
+        clojure.lang.IPersistentSet
+        (disjoin [_ item] (Foo. (disj a item)))
+        (contains [_ item] (contains? a item))
+        (get [_ item] (get a item))
+
+        Object
+        (toString [self] (str a)))
+
+(defmethod print-method Foo [o w]
+        (.write w (.toString o)))
