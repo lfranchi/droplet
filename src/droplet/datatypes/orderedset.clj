@@ -192,10 +192,15 @@
   []
   (sorted-set-by item<?))
 
+(defn- in
+  "If item exists in coll, return item; else nil."
+  [coll item]
+  (some #{item} coll))
+
 (defn removed-set
-  [oset-lattice]
-  (let [existing-paths (for [node (:oset oset-lattice)] (:path node))]
-    (set (for [item (:vc oset-lattice) :when (not (some #{(first item)} existing-paths))] (first item)))))
+  [{oset :oset vc :vc}]
+  (let [existing-paths (map :path oset)]
+    (set (filter (fn [[item & _]] (not (in existing-paths item))) vc))))
 
 (defrecord OrderedSet [oset vc]
   SemiLattice
