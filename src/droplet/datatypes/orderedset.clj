@@ -171,13 +171,11 @@
   inserts at the beginning.
   Returns the new ordered set"
   [{oset :oset :as oset-lattice} prev-data data]
-  (let [from-prev (seq (drop-while #(not= (:val %) prev-data) oset))
-        before (first from-prev)
-        after (if before (second from-prev) (first oset))
+  (let [[before after & _] (drop-while #(not= (:val %) prev-data) oset)
+        after (if before after (first oset))
         path (new-id before after)]
-    (if (or
-          (and (nil? before) (not (nil? prev-data)))
-          (= (:val after) data))
+    (if (or (and (nil? before) (seq prev-data))
+            (= (:val after) data))
       oset-lattice ;; If we didn't find the previous term (but it was specified) ignore
       (-> oset-lattice ;; Insert item and update item in vc
         (update-in [:oset] conj {:path path :val data})
