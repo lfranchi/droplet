@@ -133,8 +133,6 @@
 
   There must be no already-existing id between the two paths.
   They must be adjacent"
-  ;; TODO remove disambiguator from any non-mini node, we we only
-  ;;      need it at the end
   [{pathl :path} {pathr :path}]
   (cond
     (and (nil? pathl) (nil? pathr)) (root-node)
